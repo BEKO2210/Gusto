@@ -71,25 +71,25 @@ function extractJson(raw: string): string {
 function buildProviders(): ProviderConfig[] {
   const providers: ProviderConfig[] = [];
 
-  // 1. OpenAI — paid, schnell, sehr zuverlaessig
+  // 1. OpenAI — paid, schnell, sehr zuverlaessig (gpt-4o-mini ~5-8s typisch)
   if (process.env.OPENAI_API_KEY) {
     providers.push({
       label: 'openai',
       url: process.env.OPENAI_API_URL || 'https://api.openai.com/v1/chat/completions',
       apiKey: process.env.OPENAI_API_KEY,
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS) || 8000,
+      timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS) || 14000,
     });
   }
 
-  // 2. OpenRouter — free Modelle, ggf. rate-limited
+  // 2. OpenRouter — free Modelle, oft rate-limited oder langsam
   if (process.env.LLM_API_KEY) {
     providers.push({
       label: 'openrouter',
       url: process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions',
       apiKey: process.env.LLM_API_KEY,
       model: process.env.LLM_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
-      timeoutMs: Number(process.env.LLM_PRIMARY_TIMEOUT_MS) || 8000,
+      timeoutMs: Number(process.env.LLM_PRIMARY_TIMEOUT_MS) || 7000,
     });
   }
 
@@ -102,7 +102,7 @@ function buildProviders(): ProviderConfig[] {
         'https://integrate.api.nvidia.com/v1/chat/completions',
       apiKey: process.env.LLM_FALLBACK_API_KEY,
       model: process.env.LLM_FALLBACK_MODEL || 'meta/llama-3.3-70b-instruct',
-      timeoutMs: Number(process.env.LLM_FALLBACK_TIMEOUT_MS) || 10000,
+      timeoutMs: Number(process.env.LLM_FALLBACK_TIMEOUT_MS) || 8000,
     });
   }
 
@@ -134,6 +134,7 @@ async function callProvider(
       body: JSON.stringify({
         model: provider.model,
         temperature: 0.4,
+        max_tokens: 800,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
