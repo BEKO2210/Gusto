@@ -6,18 +6,21 @@
 [functions]
   node_bundler = "esbuild"
 
-# Optionale Default-Provider/Modell-Werte. Den geheimen Key NIEMALS hier
-# eintragen — LLM_API_KEY wird im Netlify-Dashboard unter
-# "Site settings → Environment variables" gesetzt.
+# Default Provider/Modell-Werte. Geheime Keys NIEMALS hier eintragen —
+# die werden im Netlify-Dashboard unter "Project configuration ->
+# Environment variables" gesetzt:
+#   LLM_API_KEY            (primary,  z.B. OpenRouter)
+#   LLM_FALLBACK_API_KEY   (fallback, z.B. NVIDIA Build)
 [build.environment]
+  # Primary: OpenRouter
   LLM_API_URL = "https://openrouter.ai/api/v1/chat/completions"
   LLM_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 
-# NVIDIA-Beispiel: Werte oben ueberschreiben:
-#   LLM_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-#   LLM_MODEL   = "meta/llama-3.3-70b-instruct"
+  # Fallback: NVIDIA Build (wird nur genutzt wenn primary fehlschlaegt)
+  LLM_FALLBACK_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+  LLM_FALLBACK_MODEL = "meta/llama-3.3-70b-instruct"
 
-# SPA-Fallback: alles ausser /api auf index.html.
+# SPA-Routing: /api -> Functions, alles andere -> index.html
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"

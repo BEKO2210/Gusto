@@ -7,112 +7,112 @@ nur ihr Wunschgericht ein, sonst nichts.
 ## Architektur
 
 ```
-Browser  ──►  Netlify  ──►  /api/recipe (Netlify Function)  ──►  LLM-Provider
-                                  │
-                                  └─ Env Var: LLM_API_KEY  (nie im Browser!)
+Browser  ──►  Netlify  ──►  /api/recipe (Netlify Function)  ──►  Primary  (OpenRouter)
+                                                                 ↓ falls Fehler
+                                                                Fallback (NVIDIA Build)
 ```
 
-Netlify deployt automatisch bei jedem Push auf `main`. Bei Pull-Requests
-gibt es eine Deploy-Preview-URL.
+- **Primary**: OpenRouter (kostenlose Modelle mit `:free`-Suffix)
+- **Fallback**: NVIDIA Build (50 RPM Free Tier) — wird automatisch genutzt
+  wenn OpenRouter scheitert (Rate Limit, Outage, Modell entfernt).
+
+Netlify deployt automatisch bei jedem Push auf `main`.
 
 ---
 
-## 1. Kostenlosen LLM-Provider waehlen
+## 1. Zwei kostenlose Provider-Keys holen
 
-Die Function spricht jeden **OpenAI-kompatiblen** Endpoint an. Empfehlungen:
+### Primary: OpenRouter
+- https://openrouter.ai/ → einloggen → **Keys → Create Key**
+- Key kopieren (`sk-or-v1-...`).
 
-### Variante A: OpenRouter (empfohlen, einfachster Start)
-- Anmelden: https://openrouter.ai/
-- Im Dashboard unter **Keys** einen API-Key erzeugen.
-- Kostenlose Modelle (Suffix `:free`), z.B. `meta-llama/llama-3.3-70b-instruct:free`,
-  `nvidia/llama-3.1-nemotron-70b-instruct:free`, `google/gemini-2.0-flash-exp:free`.
-- In `netlify.toml` ist OpenRouter bereits voreingestellt.
+### Fallback: NVIDIA Build
+- https://build.nvidia.com/ → einloggen → oben rechts **Get API Key**
+- Key kopieren (`nvapi-...`).
 
-### Variante B: NVIDIA Build (50 RPM Free Tier)
-- Anmelden: https://build.nvidia.com/
-- API-Key erzeugen (oben rechts → **Get API Key**).
-- In `netlify.toml` umstellen:
-  ```toml
-  [build.environment]
-  LLM_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-  LLM_MODEL   = "meta/llama-3.3-70b-instruct"
-  ```
-
-Andere kompatible Provider (Groq, Together, DeepInfra, Mistral …) funktionieren
-genauso — nur `LLM_API_URL` und `LLM_MODEL` anpassen.
+Beide sind **kostenlos**, keine Kreditkarte erforderlich.
 
 ---
 
-## 2. LLM_API_KEY in Netlify hinterlegen (einmalig)
+## 2. Beide Keys in Netlify hinterlegen
 
 1. https://app.netlify.com/ → dein Projekt **el-gusto** oeffnen.
-2. **Site settings → Environment variables → Add a variable**.
-3. Variable anlegen:
-   - **Key**: `LLM_API_KEY`
-   - **Value**: dein API-Key vom Provider (Schritt 1)
-   - **Scopes**: alle Haken setzen (Builds + Functions + Runtime).
-4. Optional, falls du auch fuer Deploy-Previews aktiv haben willst:
-   denselben Key zusaetzlich fuer **Deploy Previews** scope freigeben.
+2. Linke Sidebar: **Project configuration → Environment variables**.
+3. Auf **Add a variable** klicken und nacheinander zwei Variablen anlegen:
 
-> Wichtig: Diese Env Var wird ausschliesslich serverseitig gelesen.
-> Sie taucht nicht im Browser-Bundle auf — der Key bleibt geheim.
+   | Key                    | Value                | Scopes                          |
+   | ---------------------- | -------------------- | ------------------------------- |
+   | `LLM_API_KEY`          | OpenRouter-Key       | Builds + Functions + Runtime    |
+   | `LLM_FALLBACK_API_KEY` | NVIDIA-Key           | Builds + Functions + Runtime    |
 
-Alternativ kannst du den Key auch via Netlify CLI setzen:
-```bash
-npx netlify env:set LLM_API_KEY dein-key-hier
-```
+   Bei "Sensitive variable" den Haken setzen — dann ist der Wert maskiert.
+   Bei "Deploy contexts" auf **All deploy contexts** stehen lassen.
 
-### Warum nicht GitHub Secrets?
-Netlify deployt direkt aus deinem GitHub-Repo, ohne GitHub Actions
-dazwischen. Env Vars werden deshalb in Netlify selbst hinterlegt — das
-ist genauso sicher (server-side, nie im Browser) und einfacher.
+4. Anschliessend **Deploys → Trigger deploy → Deploy site** klicken,
+   damit der Build die neuen Variablen aufnimmt.
+
+> Die Default-URLs und Modelle stehen in `netlify.toml` und brauchen
+> normalerweise nicht angepasst zu werden.
 
 ---
 
-## 3. Deployen
+## 3. Alte Variablen aufraeumen (einmalig)
 
-Push auf `main` → Netlify baut & deployt automatisch.
-Erste Deploy-URL: `https://el-gusto.netlify.app/` (bzw. deine Custom Domain).
+Falls dein Netlify-Projekt aus einer aelteren Version Variablen wie
+`STRIPE_*`, `JWT_SECRET`, `GEMINI_API_KEY`, `DOMAIN`,
+`NETLIFY_DATABASE_URL*`, `VITE_STRIPE_*` enthaelt — die werden
+**nicht mehr** verwendet und koennen geloescht werden:
 
-PRs bekommen automatisch eine Preview-URL, die du im PR-Kommentar findest.
+1. Pro Variable rechts den Pfeil/Options-Button → **Delete**.
+2. Optional auch die **Neon-Extension** entfernen (links unter
+   *Extensions → Neon → Remove*) wenn du keine Datenbank brauchst.
+
+Es bleiben am Ende nur diese zwei (plus optional `LLM_*_URL` /
+`LLM_*_MODEL` falls du Provider/Modelle ueberschreiben willst):
+- `LLM_API_KEY`
+- `LLM_FALLBACK_API_KEY`
 
 ---
 
-## 4. Lokale Entwicklung (optional)
+## 4. Provider/Modell wechseln (optional)
+
+`netlify.toml` editieren — die Werte sind dort dokumentiert. Geheime Keys
+NIE in `netlify.toml` schreiben, nur als Env Var.
+
+Andere kostenlose Modelle bei OpenRouter:
+- `meta-llama/llama-3.3-70b-instruct:free` (Default)
+- `nvidia/llama-3.1-nemotron-70b-instruct:free`
+- `google/gemini-2.0-flash-exp:free`
+- `openrouter/free` (Auto-Router der irgendein freies Modell waehlt)
+
+Liste: https://openrouter.ai/collections/free-models
+
+---
+
+## 5. Lokale Entwicklung (optional)
 
 ```bash
 npm install
-npx netlify env:set LLM_API_KEY dein-key   # einmalig, lokal
-npm run dev                                 # netlify dev: Vite + Functions auf :8888
+npx netlify env:set LLM_API_KEY dein-openrouter-key
+npx netlify env:set LLM_FALLBACK_API_KEY dein-nvidia-key
+npm run dev   # netlify dev: Vite + Functions auf :8888
 ```
 
 Browser: http://localhost:8888
 
-`netlify dev` startet Vite und die Functions auf demselben Port und kuemmert
-sich automatisch um die `/api/recipe` → Function-Weiterleitung.
-
 ---
 
-## 5. Provider/Modell wechseln ohne Code-Aenderung
+## 6. KI-Verhalten anpassen
 
-Nur `netlify.toml` editieren (`LLM_API_URL`, `LLM_MODEL`), pushen, fertig.
-Den geheimen Key NIE in `netlify.toml` schreiben — nur als Env Var.
-
----
-
-## 6. Anpassungen am Look
-
-- `App.tsx` — Layout, Hero-Text, Beispiel-Gerichte.
-- `index.html` — Titel, Farben (`--bg-color`, `--accent-color`), Schriftarten.
-- `netlify/functions/recipe.ts` — `SYSTEM_PROMPT` aendert die KI-Persoenlichkeit
-  (z.B. "nur Bio-Produkte vorschlagen").
+`SYSTEM_PROMPT` in `netlify/functions/recipe.ts` aendern (z.B.
+"nur Bio-Produkte vorschlagen", "antworte auf Englisch"), pushen, fertig.
 
 ---
 
 ## Struktur
 
 ```
-netlify/functions/recipe.ts  Server-side LLM-Proxy (kein Key im Browser)
+netlify/functions/recipe.ts  Server-side LLM-Proxy mit Fallback (kein Key im Browser)
 netlify.toml                 Build- & Function-Konfiguration + Redirects
 services/recipeService.ts    Frontend-Client fuer /api/recipe
 App.tsx, components/         React-UI

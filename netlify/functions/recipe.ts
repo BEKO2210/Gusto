@@ -1,8 +1,13 @@
 /**
  * GUSTO Netlify Function — proxyt Rezept-Anfragen an einen
- * OpenAI-kompatiblen LLM-Provider. Der API-Key (LLM_API_KEY) bleibt
- * server-side als Netlify Environment Variable und wird nie an den
- * Browser ausgeliefert.
+ * OpenAI-kompatiblen LLM-Provider, mit automatischem Fallback auf einen
+ * zweiten Provider falls der erste fehlschlaegt (Rate Limit, Outage, …).
+ *
+ * Primary:  LLM_API_KEY  + LLM_API_URL  + LLM_MODEL
+ * Fallback: LLM_FALLBACK_API_KEY + LLM_FALLBACK_API_URL + LLM_FALLBACK_MODEL
+ *
+ * Der API-Key bleibt server-side in Netlify Environment Variables und
+ * wird nie an den Browser ausgeliefert.
  *
  * Erreichbar unter: /api/recipe (per Redirect aus netlify.toml).
  */
@@ -19,6 +24,13 @@ interface ShoppingListData {
   servings: number;
   ingredients: Ingredient[];
   notes?: string;
+}
+
+interface ProviderConfig {
+  label: string;
+  url: string;
+  apiKey: string;
+  model: string;
 }
 
 const SYSTEM_PROMPT = `Du bist GUSTO, ein hochmoderner Kulinarik-Experte.
@@ -54,15 +66,108 @@ function extractJson(raw: string): string {
   return raw.trim();
 }
 
+function buildProviders(): ProviderConfig[] {
+  const providers: ProviderConfig[] = [];
+
+  if (process.env.LLM_API_KEY) {
+    providers.push({
+      label: 'primary',
+      url: process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions',
+      apiKey: process.env.LLM_API_KEY,
+      model: process.env.LLM_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
+    });
+  }
+
+  if (process.env.LLM_FALLBACK_API_KEY) {
+    providers.push({
+      label: 'fallback',
+      url:
+        process.env.LLM_FALLBACK_API_URL ||
+        'https://integrate.api.nvidia.com/v1/chat/completions',
+      apiKey: process.env.LLM_FALLBACK_API_KEY,
+      model: process.env.LLM_FALLBACK_MODEL || 'meta/llama-3.3-70b-instruct',
+    });
+  }
+
+  return providers;
+}
+
+async function callProvider(
+  provider: ProviderConfig,
+  dish: string,
+  servings: number,
+): Promise<{ ok: true; data: ShoppingListData } | { ok: false; error: string; status?: number }> {
+  let upstream: Response;
+  try {
+    upstream = await fetch(provider.url, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${provider.apiKey}`,
+        'content-type': 'application/json',
+        'http-referer': process.env.LLM_REFERER || 'https://el-gusto.netlify.app',
+        'x-title': 'GUSTO',
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        temperature: 0.4,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `Erstelle eine professionelle Einkaufsliste für "${dish}" für ${servings} Personen.`,
+          },
+        ],
+      }),
+    });
+  } catch (err) {
+    return { ok: false, error: `Network error: ${(err as Error).message}` };
+  }
+
+  if (!upstream.ok) {
+    const text = await upstream.text().catch(() => '');
+    return {
+      ok: false,
+      status: upstream.status,
+      error: `HTTP ${upstream.status} ${text.slice(0, 200)}`,
+    };
+  }
+
+  let payload: any;
+  try {
+    payload = await upstream.json();
+  } catch {
+    return { ok: false, error: 'Antwort war kein gueltiges JSON.' };
+  }
+
+  const content: string | undefined = payload?.choices?.[0]?.message?.content;
+  if (!content) {
+    return { ok: false, error: 'Antwort enthielt keinen Inhalt.' };
+  }
+
+  let parsed: ShoppingListData;
+  try {
+    parsed = JSON.parse(extractJson(content));
+  } catch {
+    return { ok: false, error: 'Rezept-JSON konnte nicht geparst werden.' };
+  }
+
+  if (!parsed?.ingredients?.length) {
+    return { ok: false, error: 'Antwort enthielt keine Zutaten.' };
+  }
+
+  return { ok: true, data: parsed };
+}
+
 export default async (request: Request): Promise<Response> => {
   if (request.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405);
   }
 
-  const apiKey = process.env.LLM_API_KEY;
-  if (!apiKey) {
+  const providers = buildProviders();
+  if (providers.length === 0) {
     return jsonResponse(
-      { error: 'Server-Konfigurationsfehler: LLM_API_KEY fehlt.' },
+      { error: 'Server-Konfigurationsfehler: kein LLM_API_KEY hinterlegt.' },
       500,
     );
   }
@@ -85,60 +190,24 @@ export default async (request: Request): Promise<Response> => {
     return jsonResponse({ error: 'Ungültige Eingabe (Gericht oder Personenzahl).' }, 400);
   }
 
-  const url =
-    process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
-  const model = process.env.LLM_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+  const errors: string[] = [];
+  for (const provider of providers) {
+    const result = await callProvider(provider, dish, servings);
+    if (result.ok === true) {
+      return jsonResponse(result.data);
+    }
+    const msg = result.error;
+    console.error(`[${provider.label}] ${provider.url} failed:`, msg);
+    errors.push(`${provider.label}: ${msg}`);
+  }
 
-  const upstream = await fetch(url, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      'content-type': 'application/json',
-      'http-referer': process.env.LLM_REFERER || 'https://gusto.app',
-      'x-title': 'GUSTO',
+  return jsonResponse(
+    {
+      error: 'Alle LLM-Anbieter sind aktuell nicht erreichbar. Bitte spaeter erneut versuchen.',
+      details: errors,
     },
-    body: JSON.stringify({
-      model,
-      temperature: 0.4,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `Erstelle eine professionelle Einkaufsliste für "${dish}" für ${servings} Personen.`,
-        },
-      ],
-    }),
-  });
-
-  if (!upstream.ok) {
-    const text = await upstream.text();
-    console.error('LLM upstream error', upstream.status, text);
-    return jsonResponse(
-      { error: `LLM-Anbieter antwortete mit Status ${upstream.status}.` },
-      502,
-    );
-  }
-
-  const payload = (await upstream.json()) as any;
-  const content: string | undefined = payload?.choices?.[0]?.message?.content;
-  if (!content) {
-    return jsonResponse({ error: 'Keine Antwort vom LLM erhalten.' }, 502);
-  }
-
-  let parsed: ShoppingListData;
-  try {
-    parsed = JSON.parse(extractJson(content));
-  } catch (err) {
-    console.error('JSON parse failed', err, content);
-    return jsonResponse({ error: 'Antwort konnte nicht als JSON geparst werden.' }, 502);
-  }
-
-  if (!parsed?.ingredients?.length) {
-    return jsonResponse({ error: 'Antwort enthielt keine Zutaten.' }, 502);
-  }
-
-  return jsonResponse(parsed);
+    502,
+  );
 };
 
 export const config = {
