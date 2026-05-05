@@ -20,20 +20,24 @@ const App: React.FC = () => {
     if (!dish.trim()) return;
 
     setState(prev => ({ ...prev, loading: true, error: null }));
+
+    // Sofort zum Result-Bereich scrollen, damit der Loader im Sichtfeld ist
+    // waehrend die Anfrage laeuft.
+    requestAnimationFrame(() => {
+      document.getElementById('result-area')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+
     try {
       const result = await generateShoppingList(dish, servings);
       setState({ loading: false, error: null, list: result });
-      setTimeout(() => {
-        const resultArea = document.getElementById('result-area');
-        if (resultArea) {
-          resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }, 100);
     } catch (err: any) {
-      setState({ 
-        loading: false, 
-        error: err.message || 'Die GUSTO-Schnittstelle konnte Ihre Anfrage momentan nicht verarbeiten.', 
-        list: null 
+      setState({
+        loading: false,
+        error: err.message || 'Die GUSTO-Schnittstelle konnte Ihre Anfrage momentan nicht verarbeiten.',
+        list: null,
       });
     }
   };
@@ -132,8 +136,12 @@ const App: React.FC = () => {
         </section>
 
         {/* Results Area */}
-        <section id="result-area" className="min-h-[400px]">
-          {state.loading && <LoadingState />}
+        <section id="result-area" className="scroll-mt-24 min-h-[60vh] sm:min-h-[400px]">
+          {state.loading && (
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <LoadingState />
+            </div>
+          )}
           
           {state.error && (
             <div className="p-12 bg-neutral-50 rounded-[2rem] text-neutral-500 text-center animate-gusto border border-neutral-100">
