@@ -1,3 +1,0 @@
-# Lokale Worker-Secrets fuer `npm run worker` (wrangler dev).
-# Datei kopieren nach `.dev.vars` und Werte eintragen. NICHT committen.
-LLM_API_KEY=dein-openrouter-oder-nvidia-key

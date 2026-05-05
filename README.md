@@ -1,38 +1,39 @@
 # GUSTO – Setup-Anleitung
 
 GUSTO ist eine minimalistische, KI-gestützte Einkaufs-App. Der API-Key bleibt
-**immer server-side** in einem Cloudflare Worker — Nutzer der App geben
+**immer server-side** in einer Netlify Function — Nutzer der App geben
 nur ihr Wunschgericht ein, sonst nichts.
 
 ## Architektur
 
 ```
-Browser  ──►  Cloudflare Worker (statische App + /api/recipe)  ──►  LLM-Provider
-                       │
-                       └─ Secret: LLM_API_KEY  (nie im Browser!)
+Browser  ──►  Netlify  ──►  /api/recipe (Netlify Function)  ──►  LLM-Provider
+                                  │
+                                  └─ Env Var: LLM_API_KEY  (nie im Browser!)
 ```
 
-Deployment passiert automatisch per **GitHub Actions** bei jedem Push auf `main`.
+Netlify deployt automatisch bei jedem Push auf `main`. Bei Pull-Requests
+gibt es eine Deploy-Preview-URL.
 
 ---
 
 ## 1. Kostenlosen LLM-Provider waehlen
 
-Der Worker spricht jeden **OpenAI-kompatiblen** Endpoint an. Empfehlungen:
+Die Function spricht jeden **OpenAI-kompatiblen** Endpoint an. Empfehlungen:
 
 ### Variante A: OpenRouter (empfohlen, einfachster Start)
 - Anmelden: https://openrouter.ai/
 - Im Dashboard unter **Keys** einen API-Key erzeugen.
 - Kostenlose Modelle (Suffix `:free`), z.B. `meta-llama/llama-3.3-70b-instruct:free`,
   `nvidia/llama-3.1-nemotron-70b-instruct:free`, `google/gemini-2.0-flash-exp:free`.
-- In `wrangler.toml` ist OpenRouter bereits voreingestellt.
+- In `netlify.toml` ist OpenRouter bereits voreingestellt.
 
 ### Variante B: NVIDIA Build (50 RPM Free Tier)
 - Anmelden: https://build.nvidia.com/
 - API-Key erzeugen (oben rechts → **Get API Key**).
-- In `wrangler.toml` umstellen:
+- In `netlify.toml` umstellen:
   ```toml
-  [vars]
+  [build.environment]
   LLM_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
   LLM_MODEL   = "meta/llama-3.3-70b-instruct"
   ```
@@ -42,32 +43,38 @@ genauso — nur `LLM_API_URL` und `LLM_MODEL` anpassen.
 
 ---
 
-## 2. Cloudflare-Account vorbereiten (kostenlos)
+## 2. LLM_API_KEY in Netlify hinterlegen (einmalig)
 
-1. Account anlegen: https://dash.cloudflare.com/sign-up
-2. **Account-ID** kopieren (rechte Sidebar im Dashboard).
-3. **API-Token** erzeugen unter
-   *My Profile → API Tokens → Create Token → "Edit Cloudflare Workers"*.
-   Berechtigungen: `Account → Workers Scripts → Edit`.
+1. https://app.netlify.com/ → dein Projekt **el-gusto** oeffnen.
+2. **Site settings → Environment variables → Add a variable**.
+3. Variable anlegen:
+   - **Key**: `LLM_API_KEY`
+   - **Value**: dein API-Key vom Provider (Schritt 1)
+   - **Scopes**: alle Haken setzen (Builds + Functions + Runtime).
+4. Optional, falls du auch fuer Deploy-Previews aktiv haben willst:
+   denselben Key zusaetzlich fuer **Deploy Previews** scope freigeben.
+
+> Wichtig: Diese Env Var wird ausschliesslich serverseitig gelesen.
+> Sie taucht nicht im Browser-Bundle auf — der Key bleibt geheim.
+
+Alternativ kannst du den Key auch via Netlify CLI setzen:
+```bash
+npx netlify env:set LLM_API_KEY dein-key-hier
+```
+
+### Warum nicht GitHub Secrets?
+Netlify deployt direkt aus deinem GitHub-Repo, ohne GitHub Actions
+dazwischen. Env Vars werden deshalb in Netlify selbst hinterlegt — das
+ist genauso sicher (server-side, nie im Browser) und einfacher.
 
 ---
 
-## 3. GitHub-Secrets eintragen
+## 3. Deployen
 
-Im GitHub-Repo unter **Settings → Secrets and variables → Actions → New repository secret**
-genau diese drei Secrets anlegen:
+Push auf `main` → Netlify baut & deployt automatisch.
+Erste Deploy-URL: `https://el-gusto.netlify.app/` (bzw. deine Custom Domain).
 
-| Name                    | Wert                                              |
-| ----------------------- | ------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`  | Token aus Schritt 2.3                             |
-| `CLOUDFLARE_ACCOUNT_ID` | Account-ID aus Schritt 2.2                        |
-| `LLM_API_KEY`           | API-Key vom LLM-Provider (Schritt 1)              |
-
-Das war's. Beim naechsten Push auf `main` deployt die GitHub Action
-(`.github/workflows/deploy.yml`) die App automatisch.
-
-Nach dem ersten Deploy ist die App erreichbar unter:
-`https://gusto.<dein-cloudflare-subdomain>.workers.dev`
+PRs bekommen automatisch eine Preview-URL, die du im PR-Kommentar findest.
 
 ---
 
@@ -75,19 +82,21 @@ Nach dem ersten Deploy ist die App erreichbar unter:
 
 ```bash
 npm install
-cp .dev.vars.example .dev.vars   # LLM_API_KEY eintragen
-npm run worker                   # Terminal 1 — Worker auf :8787
-npm run dev                      # Terminal 2 — Vite auf :3000 (proxyt /api → :8787)
+npx netlify env:set LLM_API_KEY dein-key   # einmalig, lokal
+npm run dev                                 # netlify dev: Vite + Functions auf :8888
 ```
 
-Browser auf `http://localhost:3000` öffnen.
+Browser: http://localhost:8888
+
+`netlify dev` startet Vite und die Functions auf demselben Port und kuemmert
+sich automatisch um die `/api/recipe` → Function-Weiterleitung.
 
 ---
 
 ## 5. Provider/Modell wechseln ohne Code-Aenderung
 
-Nur `wrangler.toml` editieren (`LLM_API_URL`, `LLM_MODEL`), pushen, fertig.
-Den geheimen Key NIE in `wrangler.toml` schreiben — nur als Secret.
+Nur `netlify.toml` editieren (`LLM_API_URL`, `LLM_MODEL`), pushen, fertig.
+Den geheimen Key NIE in `netlify.toml` schreiben — nur als Env Var.
 
 ---
 
@@ -95,7 +104,7 @@ Den geheimen Key NIE in `wrangler.toml` schreiben — nur als Secret.
 
 - `App.tsx` — Layout, Hero-Text, Beispiel-Gerichte.
 - `index.html` — Titel, Farben (`--bg-color`, `--accent-color`), Schriftarten.
-- `worker/index.ts` — `SYSTEM_PROMPT` aendert die KI-Persoenlichkeit
+- `netlify/functions/recipe.ts` — `SYSTEM_PROMPT` aendert die KI-Persoenlichkeit
   (z.B. "nur Bio-Produkte vorschlagen").
 
 ---
@@ -103,9 +112,8 @@ Den geheimen Key NIE in `wrangler.toml` schreiben — nur als Secret.
 ## Struktur
 
 ```
-worker/index.ts              Cloudflare Worker (API + Static Assets)
-wrangler.toml                Worker-Konfiguration
-.github/workflows/deploy.yml Auto-Deploy bei Push auf main
+netlify/functions/recipe.ts  Server-side LLM-Proxy (kein Key im Browser)
+netlify.toml                 Build- & Function-Konfiguration + Redirects
 services/recipeService.ts    Frontend-Client fuer /api/recipe
 App.tsx, components/         React-UI
 ```

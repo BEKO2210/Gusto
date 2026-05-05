@@ -1,16 +1,11 @@
 /**
- * GUSTO Worker — serviert die statische App (via ASSETS) und proxyt
- * Rezept-Anfragen an einen OpenAI-kompatiblen LLM-Provider.
- * Der API-Key bleibt server-side und wird nie an den Browser ausgeliefert.
+ * GUSTO Netlify Function — proxyt Rezept-Anfragen an einen
+ * OpenAI-kompatiblen LLM-Provider. Der API-Key (LLM_API_KEY) bleibt
+ * server-side als Netlify Environment Variable und wird nie an den
+ * Browser ausgeliefert.
+ *
+ * Erreichbar unter: /api/recipe (per Redirect aus netlify.toml).
  */
-
-interface Env {
-  ASSETS: { fetch: (request: Request) => Promise<Response> };
-  LLM_API_KEY: string;
-  LLM_API_URL?: string;
-  LLM_MODEL?: string;
-  LLM_REFERER?: string;
-}
 
 interface Ingredient {
   name: string;
@@ -59,12 +54,13 @@ function extractJson(raw: string): string {
   return raw.trim();
 }
 
-async function handleRecipe(request: Request, env: Env): Promise<Response> {
+export default async (request: Request): Promise<Response> => {
   if (request.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405);
   }
 
-  if (!env.LLM_API_KEY) {
+  const apiKey = process.env.LLM_API_KEY;
+  if (!apiKey) {
     return jsonResponse(
       { error: 'Server-Konfigurationsfehler: LLM_API_KEY fehlt.' },
       500,
@@ -80,23 +76,25 @@ async function handleRecipe(request: Request, env: Env): Promise<Response> {
 
   const dish = typeof body.dish === 'string' ? body.dish.trim() : '';
   const servingsNum = Number(body.servings);
-  const servings = Number.isFinite(servingsNum) && servingsNum >= 1 && servingsNum <= 50
-    ? Math.floor(servingsNum)
-    : 0;
+  const servings =
+    Number.isFinite(servingsNum) && servingsNum >= 1 && servingsNum <= 50
+      ? Math.floor(servingsNum)
+      : 0;
 
   if (!dish || dish.length > 200 || !servings) {
     return jsonResponse({ error: 'Ungültige Eingabe (Gericht oder Personenzahl).' }, 400);
   }
 
-  const url = env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
-  const model = env.LLM_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+  const url =
+    process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
+  const model = process.env.LLM_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
 
   const upstream = await fetch(url, {
     method: 'POST',
     headers: {
-      'authorization': `Bearer ${env.LLM_API_KEY}`,
+      authorization: `Bearer ${apiKey}`,
       'content-type': 'application/json',
-      'http-referer': env.LLM_REFERER || 'https://gusto.app',
+      'http-referer': process.env.LLM_REFERER || 'https://gusto.app',
       'x-title': 'GUSTO',
     },
     body: JSON.stringify({
@@ -141,14 +139,8 @@ async function handleRecipe(request: Request, env: Env): Promise<Response> {
   }
 
   return jsonResponse(parsed);
-}
+};
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname === '/api/recipe') {
-      return handleRecipe(request, env);
-    }
-    return env.ASSETS.fetch(request);
-  },
+export const config = {
+  path: '/api/recipe',
 };

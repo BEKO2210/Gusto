@@ -12,10 +12,10 @@ dist
 dist-ssr
 *.local
 
-# Cloudflare / lokale Secrets
-.wrangler/
-.dev.vars
+# Netlify / lokale Secrets
+.netlify/
 .env
+.env.local
 
 # Editor directories and files
 .vscode/*
