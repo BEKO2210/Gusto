@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ShoppingListData } from '../types';
-import { ShoppingBasket, CheckCircle2, Circle, Copy, Check, Printer, ShieldCheck } from 'lucide-react';
+import { ShoppingBasket, CheckCircle2, Circle, Copy, Check, NotebookPen, ShieldCheck } from 'lucide-react';
 
 interface Props {
   data: ShoppingListData;
@@ -10,6 +10,7 @@ interface Props {
 export const ShoppingListCard: React.FC<Props> = ({ data }) => {
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const toggleItem = (id: string) => {
     setCheckedItems(prev => ({ ...prev, [id]: !prev[id] }));
@@ -17,15 +18,78 @@ export const ShoppingListCard: React.FC<Props> = ({ data }) => {
 
   const categories = Array.from(new Set(data.ingredients.map(i => i.category)));
 
+  // Plaintext-Format als Checkliste — funktioniert in Apple Notes, Samsung
+  // Notes, Google Keep, OneNote etc. "[ ]" laesst sich in den meisten
+  // Apps per Lang-Druck zur echten abhakbaren Liste konvertieren.
+  const buildNoteText = () => {
+    const lines: string[] = [
+      `GUSTO Einkaufsliste — ${data.dishName} (${data.servings} Personen)`,
+      '',
+    ];
+    for (const cat of categories) {
+      lines.push(cat.toUpperCase());
+      for (const i of data.ingredients.filter(x => x.category === cat)) {
+        lines.push(`[ ] ${i.quantity} ${i.unit} ${i.name}`.replace(/\s+/g, ' '));
+      }
+      lines.push('');
+    }
+    if (data.notes) {
+      lines.push(`Tipp: ${data.notes}`);
+    }
+    return lines.join('\n');
+  };
+
   const handleCopy = () => {
-    const text = `GUSTO Einkaufsliste: ${data.dishName} (${data.servings} Pers.)\n\n` +
-      data.ingredients.map(i => `- ${i.quantity} ${i.unit} ${i.name}`).join('\n');
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(buildNoteText());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handlePrint = () => window.print();
+  /**
+   * Oeffnet das System-Share-Sheet — der Nutzer waehlt dort selbst die
+   * Notizen-App seines Geraets:
+   *   iOS    → Notizen (Apple Notes)
+   *   Samsung→ Samsung Notes
+   *   Android→ Google Keep / Keep Notes / OneNote / ...
+   * Wenn Web Share nicht verfuegbar ist (Desktop), faellt es auf
+   * Zwischenablage zurueck und am Ende auf .txt-Download.
+   */
+  const handleSaveToNotes = async () => {
+    const text = buildNoteText();
+    const title = `Einkaufsliste: ${data.dishName}`;
+
+    if (typeof navigator !== 'undefined' && 'share' in navigator) {
+      try {
+        await navigator.share({ title, text });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+        return;
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      return;
+    } catch {
+      /* fall through */
+    }
+
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${data.dishName.replace(/[^a-z0-9äöüß ]+/gi, '').trim() || 'Einkaufsliste'}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   return (
     <div className="animate-gusto space-y-8 print-reset">
@@ -46,12 +110,21 @@ export const ShoppingListCard: React.FC<Props> = ({ data }) => {
           </div>
 
           <div className="flex gap-2 print:hidden">
-            <button onClick={handlePrint} className="p-4 hover:bg-neutral-50 rounded-2xl transition-all text-neutral-400 hover:text-neutral-900 border border-neutral-100">
-              <Printer size={20} />
+            <button
+              onClick={handleSaveToNotes}
+              aria-label="Liste in Notizen-App speichern"
+              title="In Notizen-App speichern (Apple Notes, Samsung Notes, Google Keep …)"
+              className="p-4 hover:bg-neutral-900 rounded-2xl transition-all text-neutral-400 hover:text-white border border-neutral-100 bg-white hover:border-neutral-900 flex items-center gap-2 font-medium"
+            >
+              {saved ? <Check size={20} /> : <NotebookPen size={20} />}
+              <span className="text-sm">{saved ? 'Gespeichert' : 'Notizen'}</span>
             </button>
-            <button onClick={handleCopy} className="p-4 hover:bg-neutral-900 rounded-2xl transition-all text-neutral-400 hover:text-white border border-neutral-100 bg-white hover:border-neutral-900 flex items-center gap-2 font-medium">
+            <button
+              onClick={handleCopy}
+              aria-label="Liste in die Zwischenablage kopieren"
+              className="p-4 hover:bg-neutral-50 rounded-2xl transition-all text-neutral-400 hover:text-neutral-900 border border-neutral-100"
+            >
               {copied ? <Check size={20} /> : <Copy size={20} />}
-              <span className="text-sm">Kopieren</span>
             </button>
           </div>
         </header>
