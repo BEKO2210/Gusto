@@ -1,0 +1,19 @@
+name = "gusto"
+main = "worker/index.ts"
+compatibility_date = "2025-01-15"
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# Optional: Provider/Modell ohne Code-Änderung wechseln.
+# Die geheimen Keys (LLM_API_KEY) NIEMALS hier eintragen — die werden
+# als Secret via `wrangler secret put` oder GitHub Actions gesetzt.
+[vars]
+LLM_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+LLM_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+
+# NVIDIA-Beispiel (auskommentiert):
+# LLM_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+# LLM_MODEL = "meta/llama-3.3-70b-instruct"

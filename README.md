@@ -1,48 +1,111 @@
+# GUSTO – Setup-Anleitung
 
-# GUSTO – Produktions-Guide
+GUSTO ist eine minimalistische, KI-gestützte Einkaufs-App. Der API-Key bleibt
+**immer server-side** in einem Cloudflare Worker — Nutzer der App geben
+nur ihr Wunschgericht ein, sonst nichts.
 
-GUSTO ist eine minimalistische, KI-gestützte Einkaufs-App. Diese Anleitung hilft dir, die App heute Abend live zu bringen und nach deinen Wünschen anzupassen.
+## Architektur
 
-## 🚀 Schnellstart (Deployment)
+```
+Browser  ──►  Cloudflare Worker (statische App + /api/recipe)  ──►  LLM-Provider
+                       │
+                       └─ Secret: LLM_API_KEY  (nie im Browser!)
+```
 
-Um die App sicher zu hosten, ohne deinen Google API-Key preiszugeben, empfehle ich **Vercel** oder **Netlify**.
+Deployment passiert automatisch per **GitHub Actions** bei jedem Push auf `main`.
 
-1.  **Repository hochladen**: Lade deinen Code auf GitHub/GitLab hoch.
-2.  **Projekt verbinden**: Verbinde das Repo mit Vercel/Netlify.
-3.  **Umgebungsvariablen (WICHTIG)**: 
-    *   Gehe in die Einstellungen deines Projekts (Dashboard).
-    *   Suche nach **Environment Variables**.
-    *   Füge eine neue Variable hinzu:
-        *   Name: `API_KEY`
-        *   Wert: `DEIN_GOOGLE_GEMINI_API_KEY`
-4.  **Deploy**: Klicke auf "Deploy". Die App ist nun unter einer sicheren URL (HTTPS) erreichbar.
+---
 
-## 🛠 Anpassungen (Customizing)
+## 1. Kostenlosen LLM-Provider waehlen
 
-### 1. Namen ändern
-Möchtest du "GUSTO" durch einen anderen Namen ersetzen, ändere ihn an diesen Stellen:
-*   `metadata.json`: Ändere `"name"`.
-*   `index.html`: Ändere den `<title>`.
-*   `App.tsx`: Suche nach `GUSTO.` (Zeile ~57) und dem Footer-Text.
-*   `services/geminiService.ts`: Ändere den Namen im `systemInstruction` (Zeile 15), damit die KI weiß, wer sie ist.
+Der Worker spricht jeden **OpenAI-kompatiblen** Endpoint an. Empfehlungen:
 
-### 2. Design & Farben
-Die App nutzt Tailwind CSS. Die Hauptfarben sind in der `index.html` im `:root` Bereich definiert:
-*   `--bg-color`: Hintergrundfarbe (aktuell Off-White `#fdfdfd`).
-*   `--accent-color`: Akzentfarbe (aktuell `#1a1a1a`).
+### Variante A: OpenRouter (empfohlen, einfachster Start)
+- Anmelden: https://openrouter.ai/
+- Im Dashboard unter **Keys** einen API-Key erzeugen.
+- Kostenlose Modelle (Suffix `:free`), z.B. `meta-llama/llama-3.3-70b-instruct:free`,
+  `nvidia/llama-3.1-nemotron-70b-instruct:free`, `google/gemini-2.0-flash-exp:free`.
+- In `wrangler.toml` ist OpenRouter bereits voreingestellt.
 
-### 3. KI-Verhalten anpassen
-In `services/geminiService.ts` kannst du im `systemInstruction` Block (ab Zeile 14) die "Persönlichkeit" des Assistenten ändern. Du kannst z.B. hinzufügen: "Antworte immer sehr höflich" oder "Schlage nur Bio-Produkte vor".
+### Variante B: NVIDIA Build (50 RPM Free Tier)
+- Anmelden: https://build.nvidia.com/
+- API-Key erzeugen (oben rechts → **Get API Key**).
+- In `wrangler.toml` umstellen:
+  ```toml
+  [vars]
+  LLM_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+  LLM_MODEL   = "meta/llama-3.3-70b-instruct"
+  ```
 
-## 🔒 Sicherheit
-Der API-Key wird direkt über `process.env.API_KEY` bezogen. 
-*   **Lokal**: Erstelle eine Datei namens `.env` im Hauptverzeichnis (nicht hochladen!) mit dem Inhalt: `API_KEY=dein_key`.
-*   **Server**: Nutze niemals einen hartcodierten Key im Code. Trage ihn immer im Dashboard deines Hosters ein.
+Andere kompatible Provider (Groq, Together, DeepInfra, Mistral …) funktionieren
+genauso — nur `LLM_API_URL` und `LLM_MODEL` anpassen.
 
-## 📂 Struktur
-*   `/components`: UI-Elemente (Karten, Ladebildschirm).
-*   `/services`: Logik für die Kommunikation mit Google Gemini.
-*   `App.tsx`: Das Herzstück und Layout der Anwendung.
-*   `types.ts`: Definition der Datenstrukturen.
+---
 
-Viel Erfolg beim Launch heute Abend! 🥂
+## 2. Cloudflare-Account vorbereiten (kostenlos)
+
+1. Account anlegen: https://dash.cloudflare.com/sign-up
+2. **Account-ID** kopieren (rechte Sidebar im Dashboard).
+3. **API-Token** erzeugen unter
+   *My Profile → API Tokens → Create Token → "Edit Cloudflare Workers"*.
+   Berechtigungen: `Account → Workers Scripts → Edit`.
+
+---
+
+## 3. GitHub-Secrets eintragen
+
+Im GitHub-Repo unter **Settings → Secrets and variables → Actions → New repository secret**
+genau diese drei Secrets anlegen:
+
+| Name                    | Wert                                              |
+| ----------------------- | ------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`  | Token aus Schritt 2.3                             |
+| `CLOUDFLARE_ACCOUNT_ID` | Account-ID aus Schritt 2.2                        |
+| `LLM_API_KEY`           | API-Key vom LLM-Provider (Schritt 1)              |
+
+Das war's. Beim naechsten Push auf `main` deployt die GitHub Action
+(`.github/workflows/deploy.yml`) die App automatisch.
+
+Nach dem ersten Deploy ist die App erreichbar unter:
+`https://gusto.<dein-cloudflare-subdomain>.workers.dev`
+
+---
+
+## 4. Lokale Entwicklung (optional)
+
+```bash
+npm install
+cp .dev.vars.example .dev.vars   # LLM_API_KEY eintragen
+npm run worker                   # Terminal 1 — Worker auf :8787
+npm run dev                      # Terminal 2 — Vite auf :3000 (proxyt /api → :8787)
+```
+
+Browser auf `http://localhost:3000` öffnen.
+
+---
+
+## 5. Provider/Modell wechseln ohne Code-Aenderung
+
+Nur `wrangler.toml` editieren (`LLM_API_URL`, `LLM_MODEL`), pushen, fertig.
+Den geheimen Key NIE in `wrangler.toml` schreiben — nur als Secret.
+
+---
+
+## 6. Anpassungen am Look
+
+- `App.tsx` — Layout, Hero-Text, Beispiel-Gerichte.
+- `index.html` — Titel, Farben (`--bg-color`, `--accent-color`), Schriftarten.
+- `worker/index.ts` — `SYSTEM_PROMPT` aendert die KI-Persoenlichkeit
+  (z.B. "nur Bio-Produkte vorschlagen").
+
+---
+
+## Struktur
+
+```
+worker/index.ts              Cloudflare Worker (API + Static Assets)
+wrangler.toml                Worker-Konfiguration
+.github/workflows/deploy.yml Auto-Deploy bei Push auf main
+services/recipeService.ts    Frontend-Client fuer /api/recipe
+App.tsx, components/         React-UI
+```
