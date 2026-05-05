@@ -96,11 +96,17 @@ async function callProvider(
   provider: ProviderConfig,
   dish: string,
   servings: number,
+  timeoutMs: number,
 ): Promise<{ ok: true; data: ShoppingListData } | { ok: false; error: string; status?: number }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+
   let upstream: Response;
   try {
     upstream = await fetch(provider.url, {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         authorization: `Bearer ${provider.apiKey}`,
         'content-type': 'application/json',
@@ -121,8 +127,17 @@ async function callProvider(
       }),
     });
   } catch (err) {
-    return { ok: false, error: `Network error: ${(err as Error).message}` };
+    clearTimeout(timer);
+    const isAbort = (err as Error)?.name === 'AbortError';
+    const elapsed = Date.now() - startedAt;
+    return {
+      ok: false,
+      error: isAbort
+        ? `Timeout nach ${elapsed}ms (Limit ${timeoutMs}ms)`
+        : `Network error: ${(err as Error).message}`,
+    };
   }
+  clearTimeout(timer);
 
   if (!upstream.ok) {
     const text = await upstream.text().catch(() => '');
@@ -190,14 +205,24 @@ export default async (request: Request): Promise<Response> => {
     return jsonResponse({ error: 'Ungültige Eingabe (Gericht oder Personenzahl).' }, 400);
   }
 
+  // Per-Provider Timeouts: Primary kurz, damit bei Outage/Hang schnell zum
+  // Fallback gewechselt wird. Summe bleibt unter Netlify Function-Limit.
+  const PRIMARY_TIMEOUT_MS = Number(process.env.LLM_PRIMARY_TIMEOUT_MS) || 9000;
+  const FALLBACK_TIMEOUT_MS = Number(process.env.LLM_FALLBACK_TIMEOUT_MS) || 12000;
+
   const errors: string[] = [];
-  for (const provider of providers) {
-    const result = await callProvider(provider, dish, servings);
+  for (let i = 0; i < providers.length; i++) {
+    const provider = providers[i];
+    const timeout = i === 0 ? PRIMARY_TIMEOUT_MS : FALLBACK_TIMEOUT_MS;
+    const start = Date.now();
+    const result = await callProvider(provider, dish, servings, timeout);
+    const elapsed = Date.now() - start;
     if (result.ok === true) {
+      console.log(`[${provider.label}] ok in ${elapsed}ms (model=${provider.model})`);
       return jsonResponse(result.data);
     }
     const msg = result.error;
-    console.error(`[${provider.label}] ${provider.url} failed:`, msg);
+    console.error(`[${provider.label}] ${provider.url} failed in ${elapsed}ms:`, msg);
     errors.push(`${provider.label}: ${msg}`);
   }
 
