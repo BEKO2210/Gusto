@@ -1,13 +1,14 @@
 /**
  * GUSTO Netlify Function — proxyt Rezept-Anfragen an einen
- * OpenAI-kompatiblen LLM-Provider, mit automatischem Fallback auf einen
- * zweiten Provider falls der erste fehlschlaegt (Rate Limit, Outage, …).
+ * OpenAI-kompatiblen LLM-Provider, mit automatischer Provider-Kette:
  *
- * Primary:  LLM_API_KEY  + LLM_API_URL  + LLM_MODEL
- * Fallback: LLM_FALLBACK_API_KEY + LLM_FALLBACK_API_URL + LLM_FALLBACK_MODEL
+ *   1. OpenAI         (OPENAI_API_KEY)         — schnell & zuverlaessig (paid)
+ *   2. OpenRouter     (LLM_API_KEY)            — free Modelle
+ *   3. NVIDIA Build   (LLM_FALLBACK_API_KEY)   — free Fallback
  *
- * Der API-Key bleibt server-side in Netlify Environment Variables und
- * wird nie an den Browser ausgeliefert.
+ * Reihenfolge ergibt sich aus den hinterlegten Env Vars: was nicht gesetzt
+ * ist, wird uebersprungen. Der erste erfolgreiche Provider liefert die
+ * Antwort an den Browser. API-Keys bleiben server-side.
  *
  * Erreichbar unter: /api/recipe (per Redirect aus netlify.toml).
  */
@@ -31,6 +32,7 @@ interface ProviderConfig {
   url: string;
   apiKey: string;
   model: string;
+  timeoutMs: number;
 }
 
 const SYSTEM_PROMPT = `Du bist GUSTO, ein hochmoderner Kulinarik-Experte.
@@ -69,23 +71,38 @@ function extractJson(raw: string): string {
 function buildProviders(): ProviderConfig[] {
   const providers: ProviderConfig[] = [];
 
-  if (process.env.LLM_API_KEY) {
+  // 1. OpenAI — paid, schnell, sehr zuverlaessig
+  if (process.env.OPENAI_API_KEY) {
     providers.push({
-      label: 'primary',
-      url: process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions',
-      apiKey: process.env.LLM_API_KEY,
-      model: process.env.LLM_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
+      label: 'openai',
+      url: process.env.OPENAI_API_URL || 'https://api.openai.com/v1/chat/completions',
+      apiKey: process.env.OPENAI_API_KEY,
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS) || 8000,
     });
   }
 
+  // 2. OpenRouter — free Modelle, ggf. rate-limited
+  if (process.env.LLM_API_KEY) {
+    providers.push({
+      label: 'openrouter',
+      url: process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions',
+      apiKey: process.env.LLM_API_KEY,
+      model: process.env.LLM_MODEL || 'meta-llama/llama-3.3-70b-instruct:free',
+      timeoutMs: Number(process.env.LLM_PRIMARY_TIMEOUT_MS) || 8000,
+    });
+  }
+
+  // 3. NVIDIA Build — letzter Free-Fallback
   if (process.env.LLM_FALLBACK_API_KEY) {
     providers.push({
-      label: 'fallback',
+      label: 'nvidia',
       url:
         process.env.LLM_FALLBACK_API_URL ||
         'https://integrate.api.nvidia.com/v1/chat/completions',
       apiKey: process.env.LLM_FALLBACK_API_KEY,
       model: process.env.LLM_FALLBACK_MODEL || 'meta/llama-3.3-70b-instruct',
+      timeoutMs: Number(process.env.LLM_FALLBACK_TIMEOUT_MS) || 10000,
     });
   }
 
@@ -96,11 +113,18 @@ async function callProvider(
   provider: ProviderConfig,
   dish: string,
   servings: number,
-): Promise<{ ok: true; data: ShoppingListData } | { ok: false; error: string; status?: number }> {
+): Promise<
+  { ok: true; data: ShoppingListData } | { ok: false; error: string; status?: number }
+> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), provider.timeoutMs);
+  const startedAt = Date.now();
+
   let upstream: Response;
   try {
     upstream = await fetch(provider.url, {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         authorization: `Bearer ${provider.apiKey}`,
         'content-type': 'application/json',
@@ -121,8 +145,17 @@ async function callProvider(
       }),
     });
   } catch (err) {
-    return { ok: false, error: `Network error: ${(err as Error).message}` };
+    clearTimeout(timer);
+    const isAbort = (err as Error)?.name === 'AbortError';
+    const elapsed = Date.now() - startedAt;
+    return {
+      ok: false,
+      error: isAbort
+        ? `Timeout nach ${elapsed}ms (Limit ${provider.timeoutMs}ms)`
+        : `Network error: ${(err as Error).message}`,
+    };
   }
+  clearTimeout(timer);
 
   if (!upstream.ok) {
     const text = await upstream.text().catch(() => '');
@@ -167,7 +200,10 @@ export default async (request: Request): Promise<Response> => {
   const providers = buildProviders();
   if (providers.length === 0) {
     return jsonResponse(
-      { error: 'Server-Konfigurationsfehler: kein LLM_API_KEY hinterlegt.' },
+      {
+        error:
+          'Server-Konfigurationsfehler: kein Provider-Schluessel (OPENAI_API_KEY, LLM_API_KEY, LLM_FALLBACK_API_KEY) hinterlegt.',
+      },
       500,
     );
   }
@@ -192,13 +228,18 @@ export default async (request: Request): Promise<Response> => {
 
   const errors: string[] = [];
   for (const provider of providers) {
+    const start = Date.now();
     const result = await callProvider(provider, dish, servings);
+    const elapsed = Date.now() - start;
     if (result.ok === true) {
+      console.log(`[${provider.label}] ok in ${elapsed}ms (model=${provider.model})`);
       return jsonResponse(result.data);
     }
-    const msg = result.error;
-    console.error(`[${provider.label}] ${provider.url} failed:`, msg);
-    errors.push(`${provider.label}: ${msg}`);
+    console.error(
+      `[${provider.label}] ${provider.url} failed in ${elapsed}ms:`,
+      result.error,
+    );
+    errors.push(`${provider.label}: ${result.error}`);
   }
 
   return jsonResponse(

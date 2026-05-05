@@ -12,11 +12,15 @@
 #   LLM_API_KEY            (primary,  z.B. OpenRouter)
 #   LLM_FALLBACK_API_KEY   (fallback, z.B. NVIDIA Build)
 [build.environment]
-  # Primary: OpenRouter
+  # 1. OpenAI (primary, paid — wird nur genutzt wenn OPENAI_API_KEY gesetzt ist)
+  OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+  OPENAI_MODEL = "gpt-4o-mini"
+
+  # 2. OpenRouter (free, second in chain)
   LLM_API_URL = "https://openrouter.ai/api/v1/chat/completions"
   LLM_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 
-  # Fallback: NVIDIA Build (wird nur genutzt wenn primary fehlschlaegt)
+  # 3. NVIDIA Build (free, last fallback)
   LLM_FALLBACK_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
   LLM_FALLBACK_MODEL = "meta/llama-3.3-70b-instruct"
 
