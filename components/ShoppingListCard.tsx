@@ -18,7 +18,7 @@ export const ShoppingListCard: React.FC<Props> = ({ data }) => {
   const categories = Array.from(new Set(data.ingredients.map(i => i.category)));
 
   const handleCopy = () => {
-    const text = `GUSTO Einkaufsliste: ${data.dishName} (${data.servings} Pers.)\n\n` + 
+    const text = `GUSTO Einkaufsliste: ${data.dishName} (${data.servings} Pers.)\n\n` +
       data.ingredients.map(i => `- ${i.quantity} ${i.unit} ${i.name}`).join('\n');
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -28,24 +28,24 @@ export const ShoppingListCard: React.FC<Props> = ({ data }) => {
   const handlePrint = () => window.print();
 
   return (
-    <div className="animate-gusto space-y-8">
-      <div className="bg-white rounded-[2rem] p-8 md:p-12 shadow-2xl shadow-neutral-100 border border-neutral-100 relative overflow-hidden">
+    <div className="animate-gusto space-y-8 print-reset">
+      <div className="print-card bg-white rounded-[2rem] p-6 sm:p-8 md:p-12 shadow-2xl shadow-neutral-100 border border-neutral-100 relative overflow-hidden">
         {/* Subtle Background Accent */}
-        <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none">
+        <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none print:hidden">
           <ShoppingBasket size={240} />
         </div>
 
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 border-b border-neutral-50 pb-8">
           <div>
-            <div className="flex items-center gap-2 text-neutral-400 text-xs font-bold uppercase tracking-widest mb-2">
+            <div className="flex items-center gap-2 text-neutral-400 text-xs font-bold uppercase tracking-widest mb-2 print:hidden">
               <ShieldCheck size={14} className="text-emerald-500" />
               Sicher generierte Liste
             </div>
-            <h2 className="text-4xl md:text-5xl font-serif text-neutral-900 leading-tight">{data.dishName}</h2>
-            <p className="text-neutral-500 mt-2 font-light">Zutaten für {data.servings} Personen – perfekt skaliert.</p>
+            <h2 className="print-title text-4xl md:text-5xl font-serif text-neutral-900 leading-tight">{data.dishName}</h2>
+            <p className="print-subtitle text-neutral-500 mt-2 font-light">Zutaten für {data.servings} Personen – perfekt skaliert.</p>
           </div>
-          
-          <div className="flex gap-2">
+
+          <div className="flex gap-2 print:hidden">
             <button onClick={handlePrint} className="p-4 hover:bg-neutral-50 rounded-2xl transition-all text-neutral-400 hover:text-neutral-900 border border-neutral-100">
               <Printer size={20} />
             </button>
@@ -56,10 +56,10 @@ export const ShoppingListCard: React.FC<Props> = ({ data }) => {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <div className="print-grid grid grid-cols-1 lg:grid-cols-2 gap-12">
           {categories.map(category => (
-            <div key={category} className="space-y-6">
-              <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-neutral-300 border-l-2 border-neutral-900 pl-4">
+            <div key={category} className="print-category space-y-6">
+              <h3 className="print-category-title text-sm font-bold uppercase tracking-[0.2em] text-neutral-300 border-l-2 border-neutral-900 pl-4">
                 {category}
               </h3>
               <ul className="space-y-1">
@@ -69,24 +69,25 @@ export const ShoppingListCard: React.FC<Props> = ({ data }) => {
                     const id = `${category}-${idx}`;
                     const isChecked = checkedItems[id];
                     return (
-                      <li 
+                      <li
                         key={id}
                         onClick={() => toggleItem(id)}
-                        className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all hover:bg-neutral-50 ${isChecked ? 'bg-neutral-50/50' : ''}`}
+                        className={`print-item group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all hover:bg-neutral-50 ${isChecked ? 'bg-neutral-50/50' : ''}`}
                       >
-                        <div className="flex items-center gap-4">
-                          <div className={`transition-transform duration-300 ${isChecked ? 'scale-110' : 'group-hover:scale-110'}`}>
+                        <div className="flex items-center gap-4 print:contents">
+                          <span className="print-checkbox hidden print:inline-block" aria-hidden="true"></span>
+                          <div className={`transition-transform duration-300 print:hidden ${isChecked ? 'scale-110' : 'group-hover:scale-110'}`}>
                             {isChecked ? (
                               <CheckCircle2 size={22} className="text-neutral-900" />
                             ) : (
                               <Circle size={22} className="text-neutral-200 group-hover:text-neutral-400" />
                             )}
                           </div>
-                          <span className={`text-neutral-800 transition-all font-medium ${isChecked ? 'line-through text-neutral-300' : ''}`}>
+                          <span className={`print-item-name text-neutral-800 transition-all font-medium ${isChecked ? 'line-through text-neutral-300' : ''}`}>
                             {ingredient.name}
                           </span>
                         </div>
-                        <span className={`text-sm font-mono tracking-tighter transition-all ${isChecked ? 'text-neutral-300' : 'text-neutral-400 group-hover:text-neutral-900'}`}>
+                        <span className={`print-item-qty text-sm font-mono tracking-tighter transition-all ${isChecked ? 'text-neutral-300' : 'text-neutral-400 group-hover:text-neutral-900'}`}>
                           {ingredient.quantity} {ingredient.unit}
                         </span>
                       </li>
@@ -98,22 +99,22 @@ export const ShoppingListCard: React.FC<Props> = ({ data }) => {
         </div>
 
         {data.notes && (
-          <div className="mt-16 p-8 bg-neutral-900 rounded-[1.5rem] text-white overflow-hidden relative">
+          <div className="print-note mt-16 p-8 bg-neutral-900 rounded-[1.5rem] text-white overflow-hidden relative">
             <div className="relative z-10">
-              <h4 className="text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3 flex items-center gap-2">
-                <ShieldCheck size={14} className="text-neutral-500" />
+              <h4 className="print-note-label text-xs font-bold uppercase tracking-widest text-neutral-500 mb-3 flex items-center gap-2">
+                <ShieldCheck size={14} className="text-neutral-500 print:hidden" />
                 GUSTO Empfehlung
               </h4>
               <p className="text-lg font-serif italic leading-relaxed opacity-90">"{data.notes}"</p>
             </div>
-            <div className="absolute -bottom-4 -right-4 opacity-10 transform rotate-12">
+            <div className="absolute -bottom-4 -right-4 opacity-10 transform rotate-12 print:hidden">
               <Check size={120} />
             </div>
           </div>
         )}
       </div>
-      
-      <div className="text-center px-4">
+
+      <div className="text-center px-4 print:hidden">
         <p className="text-neutral-300 text-[10px] uppercase tracking-[0.3em] font-bold">
           Verarbeitet über GUSTO Secure-API Bridge
         </p>

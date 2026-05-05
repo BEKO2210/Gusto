@@ -36,6 +36,151 @@
         .animate-gusto {
             animation: fadeInScale 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
+
+        /* Browser-Autofill-Highlight unterdruecken (gelber Hintergrund). */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+            box-shadow: 0 0 0 1000px #ffffff inset !important;
+            -webkit-text-fill-color: #1a1a1a !important;
+            caret-color: #1a1a1a !important;
+            transition: background-color 9999s ease-in-out 0s;
+        }
+
+        /* ===========================================================
+           Druck-Layout: mobil-first, schwarz/weiss, abhakbar.
+           =========================================================== */
+        @media print {
+            @page { margin: 14mm 12mm; }
+
+            html, body {
+                background: #ffffff !important;
+                color: #000 !important;
+                font-size: 12pt;
+            }
+
+            /* App-Chrome ausblenden. */
+            .no-print,
+            nav, footer,
+            .print\:hidden {
+                display: none !important;
+            }
+
+            /* Alle Layouts und Schatten/Backgrounds neutralisieren. */
+            .print-reset,
+            .print-reset * {
+                background: transparent !important;
+                box-shadow: none !important;
+                border-color: #000 !important;
+                color: #000 !important;
+            }
+
+            /* Hauptcontainer: ganze Breite, kein Padding. */
+            main {
+                padding: 0 !important;
+                max-width: 100% !important;
+            }
+
+            /* Print-Card: schlicht, lesbar. */
+            .print-card {
+                background: #fff !important;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+            }
+
+            .print-title {
+                font-size: 22pt;
+                font-weight: 700;
+                margin: 0 0 4mm 0;
+                line-height: 1.15;
+                page-break-after: avoid;
+            }
+
+            .print-subtitle {
+                font-size: 11pt;
+                margin: 0 0 8mm 0;
+                color: #444 !important;
+            }
+
+            /* Single column auf Print, Kategorien einfach untereinander. */
+            .print-grid {
+                display: block !important;
+            }
+
+            .print-category {
+                page-break-inside: avoid;
+                margin-bottom: 6mm;
+            }
+
+            .print-category-title {
+                font-size: 13pt;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                border-bottom: 1pt solid #000 !important;
+                padding: 0 0 1mm 0 !important;
+                margin: 0 0 2mm 0;
+            }
+
+            .print-item {
+                display: flex !important;
+                align-items: baseline;
+                gap: 3mm;
+                padding: 1.2mm 0 !important;
+                page-break-inside: avoid;
+                font-size: 12pt;
+                border-bottom: 0.25pt dotted #888 !important;
+            }
+
+            /* Echte Checkbox auf Papier zum Abhaken. */
+            .print-checkbox {
+                display: inline-block !important;
+                width: 4mm;
+                height: 4mm;
+                border: 1pt solid #000 !important;
+                flex-shrink: 0;
+                position: relative;
+                top: 0.4mm;
+            }
+
+            .print-item-name {
+                flex-grow: 1;
+                text-decoration: none !important;
+                color: #000 !important;
+            }
+
+            .print-item-qty {
+                font-variant-numeric: tabular-nums;
+                font-weight: 600;
+                white-space: nowrap;
+            }
+
+            .print-note {
+                margin-top: 8mm;
+                padding: 4mm;
+                border: 1pt solid #000 !important;
+                font-size: 11pt;
+                font-style: italic;
+                background: #fff !important;
+                color: #000 !important;
+                page-break-inside: avoid;
+            }
+
+            .print-note-label {
+                font-style: normal;
+                font-weight: 700;
+                font-size: 9pt;
+                text-transform: uppercase;
+                letter-spacing: 0.1em;
+                margin-bottom: 1.5mm;
+                display: block;
+            }
+        }
     </style>
 <script type="importmap">
 {
