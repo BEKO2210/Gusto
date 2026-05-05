@@ -41,7 +41,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen pb-24">
       {/* Top Navigation Bar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-6 pointer-events-none">
+      <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-6 pointer-events-none print:hidden">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-2 pointer-events-auto">
              <div className="w-10 h-10 bg-neutral-900 rounded-xl flex items-center justify-center text-white shadow-xl">
@@ -58,7 +58,7 @@ const App: React.FC = () => {
       </nav>
 
       {/* Hero Section */}
-      <header className="pt-32 pb-16 px-6 max-w-4xl mx-auto text-center animate-gusto">
+      <header className="pt-32 pb-16 px-6 max-w-4xl mx-auto text-center animate-gusto print:hidden">
         <h1 className="text-6xl md:text-8xl font-serif text-neutral-900 mb-6 tracking-tighter leading-none">
           Einkaufen <br/> <span className="italic font-normal opacity-40">neu gedacht.</span>
         </h1>
@@ -69,18 +69,22 @@ const App: React.FC = () => {
 
       <main className="px-6 max-w-4xl mx-auto space-y-24">
         {/* Entry Form */}
-        <section className="animate-gusto" style={{ animationDelay: '0.1s' }}>
+        <section className="animate-gusto print:hidden" style={{ animationDelay: '0.1s' }}>
           <form onSubmit={handleSubmit} className="space-y-8">
             <div className="bg-white rounded-[2.5rem] p-4 md:p-6 shadow-xl shadow-neutral-100 border border-neutral-100 flex flex-col md:flex-row items-stretch md:items-center gap-4">
-              
-              <div className="flex-grow flex items-center px-4 gap-4">
-                <Utensils className="text-neutral-300" size={24} />
+
+              <div className="flex-grow flex items-center pl-5 pr-4 md:px-4 gap-4">
+                <Utensils className="text-neutral-300 shrink-0" size={24} />
                 <input
                   type="text"
                   value={dish}
                   onChange={(e) => setDish(e.target.value)}
                   placeholder="Was möchten Sie kochen?"
-                  className="w-full py-4 bg-transparent border-none focus:ring-0 text-xl md:text-2xl font-serif text-neutral-800 placeholder-neutral-200"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  inputMode="text"
+                  className="w-full pl-2 pr-2 py-4 bg-transparent border-none outline-none focus:outline-none focus:ring-0 text-xl md:text-2xl font-serif text-neutral-800 placeholder-neutral-200"
                 />
               </div>
 
@@ -157,7 +161,7 @@ const App: React.FC = () => {
         </section>
       </main>
 
-      <footer className="mt-40 text-center border-t border-neutral-50 pt-12 pb-24 px-6">
+      <footer className="mt-40 text-center border-t border-neutral-50 pt-12 pb-24 px-6 print:hidden">
         <p className="text-neutral-300 text-[10px] font-bold uppercase tracking-[0.4em] mb-4">GUSTO Intelligence Service</p>
         <p className="text-neutral-400 text-[10px] font-medium max-w-xs mx-auto leading-loose">
           &copy; {new Date().getFullYear()} – All Rights Reserved.<br/>
