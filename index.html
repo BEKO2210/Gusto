@@ -37,6 +37,112 @@
             animation: fadeInScale 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
+        /* ===========================================================
+           Hex-Loader (Honeycomb) – adapted from Uiverse.io by Nawsome.
+           Scope alles unter .gusto-loader, damit generische Klassen-
+           namen (.socket, .gel, …) das globale Stylesheet nicht stoeren.
+           =========================================================== */
+        .gusto-loader {
+            position: relative;
+            width: 240px;
+            height: 240px;
+            margin: 0 auto;
+            transform-origin: center center;
+        }
+        @media (max-width: 480px) {
+            .gusto-loader { transform: scale(0.78); }
+        }
+        .gusto-loader .socket {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            left: 50%;
+            top: 50%;
+            margin-left: -100px;
+            margin-top: -100px;
+        }
+        .gusto-loader .hex-brick {
+            background: #1a1a1a;
+            width: 30px;
+            height: 17px;
+            position: absolute;
+            top: 5px;
+            animation: gusto-fade 2s infinite;
+        }
+        .gusto-loader .h2 { transform: rotate(60deg); }
+        .gusto-loader .h3 { transform: rotate(-60deg); }
+        .gusto-loader .gel {
+            height: 30px;
+            width: 30px;
+            transition: all .3s;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+        }
+        .gusto-loader .center-gel {
+            margin-left: -15px;
+            margin-top: -15px;
+            animation: gusto-pulse 2s infinite;
+        }
+        .gusto-loader .c1  { margin-left: -47px; margin-top: -15px; }
+        .gusto-loader .c2  { margin-left: -31px; margin-top: -43px; }
+        .gusto-loader .c3  { margin-left:   1px; margin-top: -43px; }
+        .gusto-loader .c4  { margin-left:  17px; margin-top: -15px; }
+        .gusto-loader .c5  { margin-left: -31px; margin-top:  13px; }
+        .gusto-loader .c6  { margin-left:   1px; margin-top:  13px; }
+        .gusto-loader .c7  { margin-left: -63px; margin-top: -43px; }
+        .gusto-loader .c8  { margin-left:  33px; margin-top: -43px; }
+        .gusto-loader .c9  { margin-left: -15px; margin-top:  41px; }
+        .gusto-loader .c10 { margin-left: -63px; margin-top:  13px; }
+        .gusto-loader .c11 { margin-left:  33px; margin-top:  13px; }
+        .gusto-loader .c12 { margin-left: -15px; margin-top: -71px; }
+        .gusto-loader .c13 { margin-left: -47px; margin-top: -71px; }
+        .gusto-loader .c14 { margin-left:  17px; margin-top: -71px; }
+        .gusto-loader .c15 { margin-left: -47px; margin-top:  41px; }
+        .gusto-loader .c16 { margin-left:  17px; margin-top:  41px; }
+        .gusto-loader .c17 { margin-left: -79px; margin-top: -15px; }
+        .gusto-loader .c18 { margin-left:  49px; margin-top: -15px; }
+        .gusto-loader .c19 { margin-left: -63px; margin-top: -99px; }
+        .gusto-loader .c20 { margin-left:  33px; margin-top: -99px; }
+        .gusto-loader .c21 { margin-left:   1px; margin-top: -99px; }
+        .gusto-loader .c22 { margin-left: -31px; margin-top: -99px; }
+        .gusto-loader .c23 { margin-left: -63px; margin-top:  69px; }
+        .gusto-loader .c24 { margin-left:  33px; margin-top:  69px; }
+        .gusto-loader .c25 { margin-left:   1px; margin-top:  69px; }
+        .gusto-loader .c26 { margin-left: -31px; margin-top:  69px; }
+        .gusto-loader .c28 { margin-left: -95px; margin-top: -43px; }
+        .gusto-loader .c29 { margin-left: -95px; margin-top:  13px; }
+        .gusto-loader .c30 { margin-left:  49px; margin-top:  41px; }
+        .gusto-loader .c31 { margin-left: -79px; margin-top: -71px; }
+        .gusto-loader .c32 { margin-left: -111px; margin-top: -15px; }
+        .gusto-loader .c33 { margin-left:  65px; margin-top: -43px; }
+        .gusto-loader .c34 { margin-left:  65px; margin-top:  13px; }
+        .gusto-loader .c35 { margin-left: -79px; margin-top:  41px; }
+        .gusto-loader .c36 { margin-left:  49px; margin-top: -71px; }
+        .gusto-loader .c37 { margin-left:  81px; margin-top: -15px; }
+        .gusto-loader .r1 { animation: gusto-pulse 2s infinite .2s; }
+        .gusto-loader .r2 { animation: gusto-pulse 2s infinite .4s; }
+        .gusto-loader .r3 { animation: gusto-pulse 2s infinite .6s; }
+        .gusto-loader .r1 > .hex-brick { animation: gusto-fade 2s infinite .2s; }
+        .gusto-loader .r2 > .hex-brick { animation: gusto-fade 2s infinite .4s; }
+        .gusto-loader .r3 > .hex-brick { animation: gusto-fade 2s infinite .6s; }
+        @keyframes gusto-pulse {
+            0%   { transform: scale(1); }
+            50%  { transform: scale(0.01); }
+            100% { transform: scale(1); }
+        }
+        @keyframes gusto-fade {
+            0%   { background: #252525; }
+            50%  { background: #000000; }
+            100% { background: #353535; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .gusto-loader .gel,
+            .gusto-loader .hex-brick {
+                animation: none !important;
+            }
+        }
+
         /* Browser-Autofill-Highlight unterdruecken (gelber Hintergrund). */
         input:-webkit-autofill,
         input:-webkit-autofill:hover,
