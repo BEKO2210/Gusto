@@ -1,48 +1,119 @@
+# GUSTO – Setup-Anleitung
 
-# GUSTO – Produktions-Guide
+GUSTO ist eine minimalistische, KI-gestützte Einkaufs-App. Der API-Key bleibt
+**immer server-side** in einer Netlify Function — Nutzer der App geben
+nur ihr Wunschgericht ein, sonst nichts.
 
-GUSTO ist eine minimalistische, KI-gestützte Einkaufs-App. Diese Anleitung hilft dir, die App heute Abend live zu bringen und nach deinen Wünschen anzupassen.
+## Architektur
 
-## 🚀 Schnellstart (Deployment)
+```
+Browser  ──►  Netlify  ──►  /api/recipe (Netlify Function)  ──►  LLM-Provider
+                                  │
+                                  └─ Env Var: LLM_API_KEY  (nie im Browser!)
+```
 
-Um die App sicher zu hosten, ohne deinen Google API-Key preiszugeben, empfehle ich **Vercel** oder **Netlify**.
+Netlify deployt automatisch bei jedem Push auf `main`. Bei Pull-Requests
+gibt es eine Deploy-Preview-URL.
 
-1.  **Repository hochladen**: Lade deinen Code auf GitHub/GitLab hoch.
-2.  **Projekt verbinden**: Verbinde das Repo mit Vercel/Netlify.
-3.  **Umgebungsvariablen (WICHTIG)**: 
-    *   Gehe in die Einstellungen deines Projekts (Dashboard).
-    *   Suche nach **Environment Variables**.
-    *   Füge eine neue Variable hinzu:
-        *   Name: `API_KEY`
-        *   Wert: `DEIN_GOOGLE_GEMINI_API_KEY`
-4.  **Deploy**: Klicke auf "Deploy". Die App ist nun unter einer sicheren URL (HTTPS) erreichbar.
+---
 
-## 🛠 Anpassungen (Customizing)
+## 1. Kostenlosen LLM-Provider waehlen
 
-### 1. Namen ändern
-Möchtest du "GUSTO" durch einen anderen Namen ersetzen, ändere ihn an diesen Stellen:
-*   `metadata.json`: Ändere `"name"`.
-*   `index.html`: Ändere den `<title>`.
-*   `App.tsx`: Suche nach `GUSTO.` (Zeile ~57) und dem Footer-Text.
-*   `services/geminiService.ts`: Ändere den Namen im `systemInstruction` (Zeile 15), damit die KI weiß, wer sie ist.
+Die Function spricht jeden **OpenAI-kompatiblen** Endpoint an. Empfehlungen:
 
-### 2. Design & Farben
-Die App nutzt Tailwind CSS. Die Hauptfarben sind in der `index.html` im `:root` Bereich definiert:
-*   `--bg-color`: Hintergrundfarbe (aktuell Off-White `#fdfdfd`).
-*   `--accent-color`: Akzentfarbe (aktuell `#1a1a1a`).
+### Variante A: OpenRouter (empfohlen, einfachster Start)
+- Anmelden: https://openrouter.ai/
+- Im Dashboard unter **Keys** einen API-Key erzeugen.
+- Kostenlose Modelle (Suffix `:free`), z.B. `meta-llama/llama-3.3-70b-instruct:free`,
+  `nvidia/llama-3.1-nemotron-70b-instruct:free`, `google/gemini-2.0-flash-exp:free`.
+- In `netlify.toml` ist OpenRouter bereits voreingestellt.
 
-### 3. KI-Verhalten anpassen
-In `services/geminiService.ts` kannst du im `systemInstruction` Block (ab Zeile 14) die "Persönlichkeit" des Assistenten ändern. Du kannst z.B. hinzufügen: "Antworte immer sehr höflich" oder "Schlage nur Bio-Produkte vor".
+### Variante B: NVIDIA Build (50 RPM Free Tier)
+- Anmelden: https://build.nvidia.com/
+- API-Key erzeugen (oben rechts → **Get API Key**).
+- In `netlify.toml` umstellen:
+  ```toml
+  [build.environment]
+  LLM_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+  LLM_MODEL   = "meta/llama-3.3-70b-instruct"
+  ```
 
-## 🔒 Sicherheit
-Der API-Key wird direkt über `process.env.API_KEY` bezogen. 
-*   **Lokal**: Erstelle eine Datei namens `.env` im Hauptverzeichnis (nicht hochladen!) mit dem Inhalt: `API_KEY=dein_key`.
-*   **Server**: Nutze niemals einen hartcodierten Key im Code. Trage ihn immer im Dashboard deines Hosters ein.
+Andere kompatible Provider (Groq, Together, DeepInfra, Mistral …) funktionieren
+genauso — nur `LLM_API_URL` und `LLM_MODEL` anpassen.
 
-## 📂 Struktur
-*   `/components`: UI-Elemente (Karten, Ladebildschirm).
-*   `/services`: Logik für die Kommunikation mit Google Gemini.
-*   `App.tsx`: Das Herzstück und Layout der Anwendung.
-*   `types.ts`: Definition der Datenstrukturen.
+---
 
-Viel Erfolg beim Launch heute Abend! 🥂
+## 2. LLM_API_KEY in Netlify hinterlegen (einmalig)
+
+1. https://app.netlify.com/ → dein Projekt **el-gusto** oeffnen.
+2. **Site settings → Environment variables → Add a variable**.
+3. Variable anlegen:
+   - **Key**: `LLM_API_KEY`
+   - **Value**: dein API-Key vom Provider (Schritt 1)
+   - **Scopes**: alle Haken setzen (Builds + Functions + Runtime).
+4. Optional, falls du auch fuer Deploy-Previews aktiv haben willst:
+   denselben Key zusaetzlich fuer **Deploy Previews** scope freigeben.
+
+> Wichtig: Diese Env Var wird ausschliesslich serverseitig gelesen.
+> Sie taucht nicht im Browser-Bundle auf — der Key bleibt geheim.
+
+Alternativ kannst du den Key auch via Netlify CLI setzen:
+```bash
+npx netlify env:set LLM_API_KEY dein-key-hier
+```
+
+### Warum nicht GitHub Secrets?
+Netlify deployt direkt aus deinem GitHub-Repo, ohne GitHub Actions
+dazwischen. Env Vars werden deshalb in Netlify selbst hinterlegt — das
+ist genauso sicher (server-side, nie im Browser) und einfacher.
+
+---
+
+## 3. Deployen
+
+Push auf `main` → Netlify baut & deployt automatisch.
+Erste Deploy-URL: `https://el-gusto.netlify.app/` (bzw. deine Custom Domain).
+
+PRs bekommen automatisch eine Preview-URL, die du im PR-Kommentar findest.
+
+---
+
+## 4. Lokale Entwicklung (optional)
+
+```bash
+npm install
+npx netlify env:set LLM_API_KEY dein-key   # einmalig, lokal
+npm run dev                                 # netlify dev: Vite + Functions auf :8888
+```
+
+Browser: http://localhost:8888
+
+`netlify dev` startet Vite und die Functions auf demselben Port und kuemmert
+sich automatisch um die `/api/recipe` → Function-Weiterleitung.
+
+---
+
+## 5. Provider/Modell wechseln ohne Code-Aenderung
+
+Nur `netlify.toml` editieren (`LLM_API_URL`, `LLM_MODEL`), pushen, fertig.
+Den geheimen Key NIE in `netlify.toml` schreiben — nur als Env Var.
+
+---
+
+## 6. Anpassungen am Look
+
+- `App.tsx` — Layout, Hero-Text, Beispiel-Gerichte.
+- `index.html` — Titel, Farben (`--bg-color`, `--accent-color`), Schriftarten.
+- `netlify/functions/recipe.ts` — `SYSTEM_PROMPT` aendert die KI-Persoenlichkeit
+  (z.B. "nur Bio-Produkte vorschlagen").
+
+---
+
+## Struktur
+
+```
+netlify/functions/recipe.ts  Server-side LLM-Proxy (kein Key im Browser)
+netlify.toml                 Build- & Function-Konfiguration + Redirects
+services/recipeService.ts    Frontend-Client fuer /api/recipe
+App.tsx, components/         React-UI
+```

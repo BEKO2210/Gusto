@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { generateShoppingList } from './services/geminiService';
+import { generateShoppingList } from './services/recipeService';
 import { AppState } from './types';
 import { LoadingState } from './components/LoadingState';
 import { ShoppingListCard } from './components/ShoppingListCard';
